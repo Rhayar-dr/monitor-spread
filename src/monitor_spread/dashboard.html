@@ -73,6 +73,10 @@
     cursor: pointer; color: #08110a; background: var(--green); transition: filter .15s; }
   .btn:hover { filter: brightness(1.15); }
   .btn:disabled { opacity: .5; cursor: default; }
+  .btn-mini { border: 0; border-radius: 6px; padding: 5px 10px; font-weight: 700; font-size: 11.5px;
+    cursor: pointer; color: #08110a; background: var(--green); white-space: nowrap; }
+  .btn-mini:hover { filter: brightness(1.15); }
+  .btn-mini:disabled { opacity: .5; cursor: default; }
   .link { background: none; border: 0; color: var(--muted); font-size: 11.5px; cursor: pointer; text-decoration: underline; }
 
   /* Painel de capital */
@@ -142,7 +146,7 @@
     <thead><tr>
       <th>Rota</th><th class="num">Compra</th><th class="num">Venda</th>
       <th class="num">Líquido</th><th class="num">Executável (R$)</th>
-      <th class="num">Lucro no teu saldo</th><th>Falta</th>
+      <th class="num">Lucro no teu saldo</th><th>Ação</th>
     </tr></thead>
     <tbody id="routes"><tr><td colspan="7" class="empty">aguardando primeiro ciclo…</td></tr></tbody>
   </table>
@@ -211,6 +215,9 @@ function renderWallet(balances, premiums) {
                                     amount: parseFloat(inp.value || "0") });
       refresh();
     });
+    // Roda do mouse / setas sobre input numérico alteram o valor em ±1 sem
+    // o usuário perceber — desfoca no scroll para proteger o saldo
+    inp.addEventListener("wheel", () => inp.blur());
   });
   const total = totalBRL + totalUSDTBRL;
   document.getElementById("total-capital").textContent = total > 0 ? fmtBRL(total) : "—";
@@ -270,19 +277,41 @@ function renderAction(advice) {
   }
 }
 
+let lastRoutes = [];
+
 function renderRoutes(routes) {
-  const rows = routes.map(r => `<tr>
+  lastRoutes = routes;
+  const rows = routes.map((r, i) => `<tr>
     <td class="route">${nome(r.buy_exchange)} <span class="arrow">→</span> ${nome(r.sell_exchange)}</td>
     <td class="num">${fmtPx(r.buy_price)}</td>
     <td class="num">${fmtPx(r.sell_price)}</td>
     <td class="num ${cls(r.net_pct)}"><b>${fmtPct(r.net_pct)}</b></td>
     <td class="num">${r.executable ? fmtBRL(r.max_notional_brl) : "—"}</td>
     <td class="num ${r.executable ? cls(r.max_profit_brl) : "muted"}">${r.executable ? fmtBRL(r.max_profit_brl) : "—"}</td>
-    <td class="muted">${r.missing.length ? r.missing.join(", ") : "✓ saldo ok"}</td>
+    <td class="muted">${r.executable
+      ? `<button class="btn-mini" data-i="${i}">✓ executei</button>`
+      : r.missing.join(", ")}</td>
   </tr>`);
   document.getElementById("routes").innerHTML =
     rows.join("") || '<tr><td colspan="7" class="empty">nenhuma rota viável no último ciclo</td></tr>';
 }
+
+document.getElementById("routes").addEventListener("click", async e => {
+  const btn = e.target.closest("button[data-i]");
+  if (!btn) return;
+  const r = lastRoutes[+btn.dataset.i];
+  if (!r) return;
+  if (r.net_pct <= 0 && !confirm(
+    `Esta rota está em ${fmtPct(r.net_pct)} (prejuízo de ${fmtBRL(Math.abs(r.max_profit_brl))}). Registrar mesmo assim?`)) return;
+  btn.disabled = true;
+  const res = await post("/api/executions", {
+    symbol: r.symbol, buy_exchange: r.buy_exchange, sell_exchange: r.sell_exchange,
+    buy_price: r.buy_price, sell_price: r.sell_price, net_pct: r.net_pct,
+    notional_brl: r.max_notional_brl,
+  });
+  if (!res.ok) alert("erro ao registrar: " + (res.error || "?"));
+  refresh();
+});
 
 function renderLatest(data) {
   const dot = document.getElementById("dot"), upd = document.getElementById("updated");
