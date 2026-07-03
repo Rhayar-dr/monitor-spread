@@ -1,0 +1,27 @@
+services:
+  monitor:
+    build: .
+    container_name: monitor-spread
+    env_file: .env
+    environment:
+      DB_PATH: /app/data/spreads.db
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    # SIGTERM já aciona o shutdown gracioso do loop principal
+    stop_grace_period: 30s
+
+  dashboard:
+    build: .
+    container_name: monitor-spread-dashboard
+    command: monitor-spread-dashboard
+    env_file: .env
+    environment:
+      DB_PATH: /app/data/spreads.db
+    volumes:
+      - ./data:/app/data
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    depends_on:
+      - monitor

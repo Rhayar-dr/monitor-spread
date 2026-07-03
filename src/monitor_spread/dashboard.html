@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>monitor-spread · USDT/BRL</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0b0f14; --panel: #11161d; --panel2: #161d26; --border: #1f2733;
+    --text: #e6edf3; --muted: #8b98a5; --green: #3fb950; --red: #f85149;
+    --blue: #58a6ff; --amber: #d29922; --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text); min-height: 100vh;
+    font: 14px/1.5 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    padding: 24px clamp(16px, 4vw, 48px);
+  }
+  header { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 22px; }
+  h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
+  h1 span { color: var(--blue); }
+  .live { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12.5px; margin-left: auto; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+  .dot.stale { background: var(--amber); animation: none; }
+  @keyframes pulse { 50% { opacity: .35; } }
+
+  .grid { display: grid; gap: 14px; }
+  .kpis { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); margin-bottom: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; }
+  .card h3 { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; margin-bottom: 10px; }
+  .kpi-value { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .kpi-sub { color: var(--muted); font-size: 12.5px; margin-top: 4px; }
+  .pos { color: var(--green); } .neg { color: var(--red); }
+
+  .cols { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); align-items: start; }
+  .exchanges { display: grid; gap: 10px; }
+  .ex-row {
+    display: grid; grid-template-columns: 1.2fr 1fr 1fr 0.9fr; gap: 8px;
+    background: var(--panel2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 14px; align-items: center; font-variant-numeric: tabular-nums;
+  }
+  .ex-row .name { font-weight: 600; }
+  .ex-row small { display: block; color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: .4px; }
+  .chart-wrap { height: 280px; position: relative; }
+
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th { text-align: left; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  td { padding: 9px 10px; border-bottom: 1px solid var(--border); }
+  tr:last-child td { border-bottom: none; }
+  td.num, th.num { text-align: right; }
+  .route { font-weight: 600; }
+  .route .arrow { color: var(--muted); font-weight: 400; }
+  .muted { color: var(--muted); }
+
+  .explain { color: var(--muted); font-size: 12.5px; margin-top: 18px; line-height: 1.65; }
+  .explain b { color: var(--text); }
+  .empty { color: var(--muted); text-align: center; padding: 28px 0; }
+  footer { margin-top: 20px; color: var(--muted); font-size: 11.5px; }
+
+  /* Banner de ação */
+  .action { border-radius: var(--radius); padding: 18px 22px; margin-bottom: 14px;
+    display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+    border: 1px solid var(--border); background: var(--panel); }
+  .action.go { border-color: rgba(63,185,80,.55); background: linear-gradient(90deg, rgba(63,185,80,.14), rgba(63,185,80,.03));
+    box-shadow: 0 0 24px rgba(63,185,80,.12); }
+  .action.warn { border-color: rgba(210,153,34,.5); background: linear-gradient(90deg, rgba(210,153,34,.12), rgba(210,153,34,.02)); }
+  .action .headline { font-size: 17px; font-weight: 700; }
+  .action .detail { color: var(--muted); font-size: 13px; margin-top: 3px; }
+  .action .detail b { color: var(--text); }
+  .action .grow { flex: 1; min-width: 260px; }
+  .btn { border: 0; border-radius: 8px; padding: 11px 18px; font-weight: 700; font-size: 13.5px;
+    cursor: pointer; color: #08110a; background: var(--green); transition: filter .15s; }
+  .btn:hover { filter: brightness(1.15); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .link { background: none; border: 0; color: var(--muted); font-size: 11.5px; cursor: pointer; text-decoration: underline; }
+
+  /* Painel de capital */
+  .wallet { display: grid; gap: 10px; }
+  .wallet-row { display: grid; grid-template-columns: 1.1fr 1fr 1fr; gap: 8px; align-items: center;
+    background: var(--panel2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; }
+  .wallet-row .name { font-weight: 600; }
+  .wallet-row label { display: block; color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 3px; }
+  .wallet-row input { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 7px 9px; font: inherit; font-variant-numeric: tabular-nums; }
+  .wallet-row input:focus { outline: none; border-color: var(--blue); }
+  .exec-item { font-size: 12.5px; color: var(--muted); padding: 6px 0; border-bottom: 1px solid var(--border); }
+  .exec-item:last-child { border-bottom: none; }
+  .exec-item b { color: var(--text); }
+</style>
+</head>
+<body>
+<header>
+  <h1>📈 monitor-spread <span id="symbols">USDT/BRL</span></h1>
+  <div class="live"><span class="dot" id="dot"></span><span id="updated">carregando…</span></div>
+</header>
+
+<div class="action" id="action">
+  <div class="grow">
+    <div class="headline" id="action-headline">carregando…</div>
+    <div class="detail" id="action-detail"></div>
+  </div>
+  <button class="btn" id="action-btn" style="display:none">✅ Executei esta operação</button>
+</div>
+
+<div class="grid kpis">
+  <div class="card">
+    <h3>Melhor spread agora</h3>
+    <div class="kpi-value" id="best-net">—</div>
+    <div class="kpi-sub" id="best-net-sub">capital pré-posicionado, ordens simultâneas</div>
+  </div>
+  <div class="card">
+    <h3>Capital total</h3>
+    <div class="kpi-value" id="total-capital">—</div>
+    <div class="kpi-sub" id="total-split">preencha teus saldos no painel abaixo</div>
+  </div>
+  <div class="card">
+    <h3>Threshold de alerta</h3>
+    <div class="kpi-value" id="threshold">—</div>
+    <div class="kpi-sub" id="reverse-threshold"></div>
+  </div>
+</div>
+
+<div class="grid cols">
+  <div class="card">
+    <h3>Meu capital (edite os saldos reais)</h3>
+    <div class="wallet" id="wallet"><div class="empty">carregando…</div></div>
+    <div id="executions" style="margin-top:12px"></div>
+  </div>
+  <div class="card">
+    <h3>Cotações e ágio vs. dólar (VWAP p/ perna)</h3>
+    <div class="exchanges" id="exchanges"><div class="empty">aguardando primeiro ciclo…</div></div>
+    <h3 style="margin-top:18px">Melhor spread líquido · últimas 6h</h3>
+    <div class="chart-wrap"><canvas id="chart"></canvas></div>
+  </div>
+</div>
+
+<div class="card" style="margin-top:14px">
+  <h3>Rotas do último ciclo × teu saldo</h3>
+  <div style="overflow-x:auto">
+  <table>
+    <thead><tr>
+      <th>Rota</th><th class="num">Compra</th><th class="num">Venda</th>
+      <th class="num">Líquido</th><th class="num">Executável (R$)</th>
+      <th class="num">Lucro no teu saldo</th><th>Falta</th>
+    </tr></thead>
+    <tbody id="routes"><tr><td colspan="7" class="empty">aguardando primeiro ciclo…</td></tr></tbody>
+  </table>
+  </div>
+  <p class="explain">
+    <b>Como funciona:</b> a estratégia é sempre capital pré-posicionado — BRL parado na ponta de
+    compra, USDT parado na ponta de venda, ordens simultâneas quando a janela abre. Cada rota é
+    dimensionada pelo teu saldo real: <b>executável = min(BRL na compra, USDT na venda)</b>. Ao
+    clicar em "Executei", o app movimenta os saldos (BRL sai da compra, USDT entra lá; USDT sai da
+    venda, BRL entra lá) — depois de uma execução, a rota inversa naturalmente vira a única com
+    saldo, e o app passa a recomendá-la (threshold reduzido: além de lucrar, ela reequilibra o
+    capital). O líquido desconta corretagens taker das duas pontas; transferências entre exchanges
+    e IR ficam fora — ver README. <b>Nenhuma ordem é enviada pelo app</b>: por enquanto ele só
+    espelha o que você fizer, que é o modelo que a gestão automática (v2) vai seguir.
+  </p>
+</div>
+
+<footer>Vendas acima de R$ 35 mil/mês em exchanges nacionais perdem a isenção de IR (15% sobre o ganho). Dados: order books públicos + USD/BRL (AwesomeAPI).</footer>
+
+<script>
+const fmtBRL = v => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const fmtPct = v => (v >= 0 ? "+" : "") + v.toFixed(2).replace(".", ",") + "%";
+const fmtPx  = v => v.toLocaleString("pt-BR", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+const cls    = v => v >= 0 ? "pos" : "neg";
+const nome   = ex => ex.replaceAll("_", " ");
+let chart, cfg = { threshold_pct: 0.8, reverse_threshold_pct: 0, capital_brl: 11000, exchanges: [] };
+let currentAction = null;
+
+async function j(url) { const r = await fetch(url); return r.json(); }
+async function post(url, body) {
+  const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" },
+                               body: JSON.stringify(body || {}) });
+  return r.json();
+}
+
+async function loadConfig() {
+  cfg = await j("/api/config");
+  document.getElementById("threshold").textContent = fmtPct(cfg.threshold_pct).replace("+", "");
+  document.getElementById("reverse-threshold").textContent =
+    `rotas que reequilibram o capital alertam acima de ${fmtPct(cfg.reverse_threshold_pct)}`;
+  document.getElementById("symbols").textContent = cfg.symbols.join(" · ");
+}
+
+function usdtPrice(premiums, exchange) {
+  const p = premiums.find(x => x.exchange === exchange);
+  return p ? (p.bid_vwap || p.best_bid || 0) : 0;
+}
+
+function renderWallet(balances, premiums) {
+  const el = document.getElementById("wallet");
+  let totalBRL = 0, totalUSDT = 0, totalUSDTBRL = 0;
+  el.innerHTML = cfg.exchanges.map(ex => {
+    const brl = (balances[ex] || {}).BRL ?? 0;
+    const usdt = (balances[ex] || {}).USDT ?? 0;
+    totalBRL += brl; totalUSDT += usdt;
+    totalUSDTBRL += usdt * usdtPrice(premiums, ex);
+    return `<div class="wallet-row">
+      <div class="name">${nome(ex)}</div>
+      <div><label>BRL</label><input type="number" min="0" step="any" value="${brl}" data-ex="${ex}" data-asset="BRL"></div>
+      <div><label>USDT</label><input type="number" min="0" step="any" value="${usdt}" data-ex="${ex}" data-asset="USDT"></div>
+    </div>`;
+  }).join("");
+  el.querySelectorAll("input").forEach(inp => {
+    inp.addEventListener("change", async () => {
+      await post("/api/balances", { exchange: inp.dataset.ex, asset: inp.dataset.asset,
+                                    amount: parseFloat(inp.value || "0") });
+      refresh();
+    });
+  });
+  const total = totalBRL + totalUSDTBRL;
+  document.getElementById("total-capital").textContent = total > 0 ? fmtBRL(total) : "—";
+  document.getElementById("total-split").textContent = total > 0
+    ? `${fmtBRL(totalBRL)} em reais + ${totalUSDT.toLocaleString("pt-BR", {maximumFractionDigits: 2})} USDT (~${fmtBRL(totalUSDTBRL)})`
+    : "preencha teus saldos no painel abaixo";
+}
+
+function renderExecutions(executions) {
+  const el = document.getElementById("executions");
+  if (!executions.length) { el.innerHTML = ""; return; }
+  el.innerHTML = `<h3 style="margin-bottom:6px">Execuções recentes</h3>` +
+    executions.map(e => {
+      const t = new Date(e.ts * 1000).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+      const profit = e.proceeds_brl != null && e.notional_brl != null ? e.proceeds_brl - e.notional_brl : null;
+      return `<div class="exec-item">${t} · <b>${nome(e.buy_exchange)} → ${nome(e.sell_exchange)}</b>` +
+        (e.notional_brl ? ` · ${fmtBRL(e.notional_brl)}` : "") +
+        (profit != null ? ` · lucro <b class="${cls(profit)}">${fmtBRL(profit)}</b>` : "") + `</div>`;
+    }).join("") +
+    `<button class="link" id="undo-btn">desfazer última execução (estorna saldos)</button>`;
+  document.getElementById("undo-btn").onclick = async () => { await post("/api/executions/undo"); refresh(); };
+}
+
+function renderAction(advice) {
+  const box = document.getElementById("action");
+  const head = document.getElementById("action-headline");
+  const detail = document.getElementById("action-detail");
+  const btn = document.getElementById("action-btn");
+  box.className = "action"; btn.style.display = "none"; currentAction = null;
+  const a = advice.action || { type: "none" };
+
+  if (a.type === "setup") {
+    box.classList.add("warn");
+    head.textContent = "👋 Primeiro passo: diga onde teu capital está";
+    detail.textContent = "Preencha os saldos de BRL e USDT de cada exchange no painel \"Meu capital\". A partir disso o app calcula o que dá para executar e recomenda a melhor ação.";
+  } else if (a.type === "execute") {
+    const r = a.route; currentAction = r;
+    box.classList.add("go");
+    head.textContent = `🎯 FAÇA AGORA — compre na ${nome(r.buy_exchange)}, venda na ${nome(r.sell_exchange)}`;
+    detail.innerHTML =
+      `use até <b>${fmtBRL(r.max_notional_brl)}</b> (teu saldo permite): compra a <b>${fmtPx(r.buy_price)}</b>, ` +
+      `venda a <b>${fmtPx(r.sell_price)}</b> → lucro <b>${fmtBRL(r.max_profit_brl)}</b> (${fmtPct(r.net_pct)} líquido)` +
+      (r.rebalancing ? " · ↩ e ainda reequilibra teu capital." : ".");
+    btn.style.display = "";
+  } else if (a.type === "capital_misplaced") {
+    const r = a.route;
+    box.classList.add("warn");
+    head.textContent = `⚠️ Janela aberta, mas teu capital está no lugar errado`;
+    detail.innerHTML = `${nome(r.buy_exchange)} → ${nome(r.sell_exchange)} está a <b>${fmtPct(r.net_pct)}</b>, ` +
+      `mas falta <b>${r.missing.join(" e ")}</b>. Ou transfira capital (TRC-20 / PIX), ou aguarde a janela no sentido que teu saldo permite.`;
+  } else {
+    head.textContent = "Sem janela aberta no momento";
+    const best = (advice.routes || [])[0];
+    detail.textContent = best
+      ? `melhor rota agora: ${nome(best.buy_exchange)} → ${nome(best.sell_exchange)} a ${fmtPct(best.net_pct)} (alerta acima de ${fmtPct(cfg.threshold_pct)}).`
+      : "aguardando dados do monitor.";
+  }
+}
+
+function renderRoutes(routes) {
+  const rows = routes.map(r => `<tr>
+    <td class="route">${nome(r.buy_exchange)} <span class="arrow">→</span> ${nome(r.sell_exchange)}</td>
+    <td class="num">${fmtPx(r.buy_price)}</td>
+    <td class="num">${fmtPx(r.sell_price)}</td>
+    <td class="num ${cls(r.net_pct)}"><b>${fmtPct(r.net_pct)}</b></td>
+    <td class="num">${r.executable ? fmtBRL(r.max_notional_brl) : "—"}</td>
+    <td class="num ${r.executable ? cls(r.max_profit_brl) : "muted"}">${r.executable ? fmtBRL(r.max_profit_brl) : "—"}</td>
+    <td class="muted">${r.missing.length ? r.missing.join(", ") : "✓ saldo ok"}</td>
+  </tr>`);
+  document.getElementById("routes").innerHTML =
+    rows.join("") || '<tr><td colspan="7" class="empty">nenhuma rota viável no último ciclo</td></tr>';
+}
+
+function renderLatest(data) {
+  const dot = document.getElementById("dot"), upd = document.getElementById("updated");
+  if (!data.ts) { upd.textContent = "aguardando dados — o monitor está rodando?"; dot.classList.add("stale"); return; }
+  const age = Date.now() / 1000 - data.ts;
+  dot.classList.toggle("stale", age > 60);
+  upd.textContent = "atualizado " + (age < 60 ? `há ${Math.round(age)}s` : new Date(data.ts * 1000).toLocaleTimeString("pt-BR"));
+
+  const best = (data.opportunities || [])[0];
+  const bn = document.getElementById("best-net");
+  if (best) {
+    bn.textContent = fmtPct(best.net_pct);
+    bn.className = "kpi-value " + cls(best.net_pct);
+    document.getElementById("best-net-sub").textContent =
+      `${nome(best.buy_exchange)} → ${nome(best.sell_exchange)} · lucro ${fmtBRL(best.est_profit_brl)} p/ perna padrão`;
+  }
+
+  document.getElementById("exchanges").innerHTML = data.premiums.map(p => `
+    <div class="ex-row">
+      <div class="name">${nome(p.exchange)}<small>${p.symbol}</small></div>
+      <div>${p.bid_vwap ? fmtPx(p.bid_vwap) : "—"}<small>vende (bid)</small></div>
+      <div>${p.ask_vwap ? fmtPx(p.ask_vwap) : "—"}<small>compra (ask)</small></div>
+      <div class="${p.agio_bruto_pct != null ? cls(p.agio_bruto_pct) : ""}">
+        ${p.agio_bruto_pct != null ? fmtPct(p.agio_bruto_pct) : "—"}<small>ágio bruto</small></div>
+    </div>`).join("") || '<div class="empty">sem dados</div>';
+}
+
+function renderHistory(data) {
+  const pts = (data.series || []).map(([t, v]) => ({ x: t * 1000, y: v }));
+  const datasets = [
+    { label: "melhor spread líquido", data: pts, borderColor: "#58a6ff",
+      backgroundColor: "transparent", tension: .25, pointRadius: 0, borderWidth: 2 },
+    { label: "threshold", data: [], borderColor: "#3fb950", borderDash: [6, 5], pointRadius: 0, borderWidth: 1.5 },
+  ];
+  if (pts.length) {
+    datasets[1].data = [{ x: pts[0].x, y: cfg.threshold_pct }, { x: pts[pts.length - 1].x, y: cfg.threshold_pct }];
+  }
+  if (chart) { chart.data.datasets = datasets; chart.update("none"); return; }
+  chart = new Chart(document.getElementById("chart"), {
+    type: "line",
+    data: { datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      interaction: { mode: "nearest", intersect: false },
+      plugins: { legend: { labels: { color: "#8b98a5", boxWidth: 18, font: { size: 11 } } },
+                 tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${c.parsed.y.toFixed(3)}%` } } },
+      scales: {
+        x: { type: "linear", ticks: { color: "#8b98a5", maxTicksLimit: 8,
+               callback: v => new Date(v).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) },
+             grid: { color: "#1f2733" } },
+        y: { ticks: { color: "#8b98a5", callback: v => v.toFixed(2) + "%" }, grid: { color: "#1f2733" } },
+      },
+    },
+  });
+}
+
+document.getElementById("action-btn").onclick = async function () {
+  if (!currentAction) return;
+  this.disabled = true;
+  const r = await post("/api/executions", {
+    symbol: currentAction.symbol,
+    buy_exchange: currentAction.buy_exchange,
+    sell_exchange: currentAction.sell_exchange,
+    buy_price: currentAction.buy_price,
+    sell_price: currentAction.sell_price,
+    net_pct: currentAction.net_pct,
+    notional_brl: currentAction.max_notional_brl,
+  });
+  this.disabled = false;
+  if (!r.ok) alert("erro ao registrar: " + (r.error || "?"));
+  refresh();
+};
+
+async function refresh() {
+  try {
+    const [latest, history, advice, inv] = await Promise.all(
+      [j("/api/latest"), j("/api/history?hours=6"), j("/api/advice"), j("/api/inventory")]);
+    renderLatest(latest);
+    // Só re-renderiza a carteira se nenhum campo está em edição
+    if (!document.activeElement || document.activeElement.tagName !== "INPUT") {
+      renderWallet(advice.balances || {}, latest.premiums || []);
+    }
+    renderExecutions(inv.executions || []);
+    renderAction(advice);
+    renderRoutes(advice.routes || []);
+    renderHistory(history);
+  } catch (e) {
+    document.getElementById("updated").textContent = "erro ao atualizar: " + e.message;
+    document.getElementById("dot").classList.add("stale");
+  }
+}
+
+loadConfig().then(refresh);
+setInterval(refresh, 10_000);
+</script>
+</body>
+</html>
