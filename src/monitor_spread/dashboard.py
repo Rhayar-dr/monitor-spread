@@ -365,7 +365,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                         "capital_brl": self.settings.capital_brl,
                         "poll_interval_seconds": self.settings.poll_interval_seconds,
                         "symbols": list(self.settings.symbol_list()),
-                        "exchanges": ["mercado_bitcoin", "foxbit", "brasil_bitcoin"],
+                        "exchanges": ["mercado_bitcoin", "foxbit", "brasil_bitcoin", "binance"],
                     }
                 )
             else:

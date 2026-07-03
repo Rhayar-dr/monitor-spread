@@ -26,9 +26,9 @@ from itertools import permutations
 
 from .models import (
     BINANCE,
-    BR_EXCHANGES,
     MODE_PREPOSITIONED,
     REFERENCIA_USD,
+    VENUES,
     CycleSnapshot,
     ExchangePremium,
     Level,
@@ -286,7 +286,7 @@ def compute_cycle(
     for symbol in _symbols_present(books):
         symbol_books = {
             exchange: books[exchange][symbol]
-            for exchange in BR_EXCHANGES
+            for exchange in VENUES
             if symbol in books.get(exchange, {})
         }
         reference = references.get(symbol)
@@ -309,9 +309,14 @@ def compute_cycle(
 
 
 def _symbols_present(books: Mapping[str, Mapping[str, OrderBook]]) -> list[str]:
-    """Símbolos BRL presentes em pelo menos uma exchange BR, ordem estável."""
+    """Símbolos /BRL presentes em pelo menos uma venue, em ordem estável.
+
+    Pares que não são contra BRL (ex.: BTC/USDT, usado só como referência)
+    ficam de fora — não são rotas operáveis em reais.
+    """
     seen: dict[str, None] = {}
-    for exchange in BR_EXCHANGES:
+    for exchange in VENUES:
         for symbol in books.get(exchange, {}):
-            seen.setdefault(symbol, None)
+            if symbol.endswith("/BRL"):
+                seen.setdefault(symbol, None)
     return list(seen)

@@ -164,17 +164,18 @@ class MarketDataCollector:
         self._settings = settings
         self._http = httpx.AsyncClient(timeout=settings.request_timeout_seconds)
         symbols = settings.symbol_list()
+        # A Binance negocia os mesmos pares /BRL (com taker bem menor) e
+        # entra como venue de arbitragem; o BTC/USDT é coletado só quando o
+        # BTC está monitorado, como referência internacional.
+        binance_symbols = list(symbols)
+        if "BTC/BRL" in symbols:
+            binance_symbols.append("BTC/USDT")
         self._collectors: list[BaseCollector] = [
             CcxtCollector(MERCADO_BITCOIN, "mercado", symbols, settings.request_timeout_seconds),
             FoxbitCollector(self._http, symbols),
             BrasilBitcoinCollector(self._http, symbols),
+            CcxtCollector(BINANCE, "binance", tuple(binance_symbols), settings.request_timeout_seconds),
         ]
-        # A Binance só é necessária como referência internacional do BTC;
-        # para USDT a referência é a própria cotação USD/BRL.
-        if "BTC/BRL" in symbols:
-            self._collectors.append(
-                CcxtCollector(BINANCE, "binance", ("BTC/USDT",), settings.request_timeout_seconds)
-            )
 
     async def _with_retry(self, description: str, factory: Callable[[], Awaitable[T]]) -> T:
         """Executa uma corrotina com timeout e retry com backoff exponencial."""

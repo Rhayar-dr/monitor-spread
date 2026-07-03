@@ -1,10 +1,11 @@
 # monitor-spread
 
-Monitor de arbitragem de criptomoedas entre exchanges brasileiras (Mercado
-Bitcoin, Foxbit, Brasil Bitcoin) e a referência internacional. Por padrão
-monitora apenas **USDT/BRL** (referência: cotação USD/BRL); o par
-**BTC/BRL** (referência: Binance BTC/USDT × USD/BRL) pode ser reativado via
-`SYMBOLS` no `.env`.
+Monitor de arbitragem de criptomoedas entre quatro venues que negociam
+pares em reais: Mercado Bitcoin, Foxbit, Brasil Bitcoin e **Binance** (que
+tem USDT/BRL direto, com taker bem menor — costuma ser a ponta que abre
+rota). Por padrão monitora apenas **USDT/BRL** (referência: cotação
+USD/BRL); o par **BTC/BRL** (referência: Binance BTC/USDT × USD/BRL) pode
+ser reativado via `SYMBOLS` no `.env`.
 
 A cada ciclo (default 10s) o monitor:
 

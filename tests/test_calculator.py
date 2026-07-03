@@ -196,6 +196,28 @@ class TestRebalanceamentoPago:
         assert route_economics(5.20, 5.30, 5.0, 0.005, 0.007, transfer_fee_base=1.0) is None
 
 
+class TestBinanceComoVenue:
+    def test_binance_participa_das_rotas_usdt(self) -> None:
+        """Binance negocia USDT/BRL e deve gerar rotas contra as BR."""
+        books = {
+            FOXBIT: {"USDT/BRL": deep_book(FOXBIT, "USDT/BRL", 5.30)},
+            BINANCE: {
+                "USDT/BRL": deep_book(BINANCE, "USDT/BRL", 5.20),
+                "BTC/USDT": deep_book(BINANCE, "BTC/USDT", 110_000.0),
+            },
+        }
+        snapshot = compute_cycle(books, USD_BRL, FEES, CAPITAL, now=0.0)
+        assert any(
+            o.buy_exchange == BINANCE and o.sell_exchange == FOXBIT
+            for o in snapshot.opportunities
+        )
+        # BTC/USDT é referência, não rota nem cotação operável em BRL
+        assert all(o.symbol.endswith("/BRL") for o in snapshot.opportunities)
+        assert all(p.symbol.endswith("/BRL") for p in snapshot.premiums)
+        # O ágio da própria Binance vs. dólar também é medido
+        assert any(p.exchange == BINANCE and p.symbol == "USDT/BRL" for p in snapshot.premiums)
+
+
 class TestCapturaPrePosicionada:
     def test_book_com_liquidez_para_a_perna_gera_rota(self) -> None:
         """O VWAP usa o notional da perna: R$ 6.360 de book bastam."""

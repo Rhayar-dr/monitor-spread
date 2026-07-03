@@ -20,6 +20,9 @@ BINANCE = "binance"
 REFERENCIA_USD = "referencia_usd"
 
 BR_EXCHANGES: tuple[str, ...] = (MERCADO_BITCOIN, FOXBIT, BRASIL_BITCOIN)
+# Venues de negociação: exchanges BR + Binance (que negocia pares /BRL
+# diretamente, com taker bem menor — é a ponta que costuma abrir rota).
+VENUES: tuple[str, ...] = (*BR_EXCHANGES, BINANCE)
 BR_SYMBOLS: tuple[str, ...] = ("BTC/BRL", "USDT/BRL")
 
 # Modos de execução de uma rota de arbitragem.
